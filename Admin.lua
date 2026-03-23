@@ -1,8 +1,8 @@
 --[[
     ╔══════════════════════════════════════════╗
     ║         H4LL0 ADMIN HUB                 ║
-    ║          Admin Panel  •  v1.0           ║
-    ║            KEY NEEDED                   ║
+    ║          Admin Panel  •  v2.0           ║
+    ║     FIXED: Fly Mobile Controller        ║
     ╚══════════════════════════════════════════╝
 ]]
 
@@ -14,7 +14,6 @@ local Debris           = game:GetService("Debris")
 local LocalPlayer      = Players.LocalPlayer
 local Camera           = workspace.CurrentCamera
 
--- Admin Blue Theme
 local C = {
     BG_Main    = Color3.fromRGB(8,  12, 20),
     BG_Side    = Color3.fromRGB(12, 18, 30),
@@ -49,13 +48,16 @@ local Toggles = {
 }
 
 local Settings = {
-    WalkSpeed  = 16,
-    FlySpeed   = 50,
-    FOV        = 200,
-    AimSpeed   = 10,
+    WalkSpeed      = 16,
+    FlySpeed       = 50,
+    FOV            = 200,
+    AimSpeed       = 10,
+    FlyDir         = nil, -- for mobile fly controller
+    FlyBG          = nil,
+    FlyBV          = nil,
     SelectedPlayer = nil,
     BannedPlayers  = {},
-    VALID_KEY  = "Admin_key_Cheat",
+    VALID_KEY      = "Admin_key_Cheat",
 }
 
 local Connections = {}
@@ -123,13 +125,10 @@ local function GetAimTarget()
     return closest
 end
 
--- Auto kick banned players
 local function StartBanCheck()
     Connections.BanCheck = Players.PlayerAdded:Connect(function(plr)
         if Settings.BannedPlayers[plr.UserId] or Settings.BannedPlayers[plr.Name] then
-            pcall(function()
-                plr:Kick("🛡️ You are banned from this server by H4ll0 Admin Hub.")
-            end)
+            pcall(function() plr:Kick("🛡️ You are banned from this server by H4ll0 Admin Hub.") end)
         end
     end)
 end
@@ -162,23 +161,66 @@ local function ApplyFeature(key, val)
         if val then
             pcall(function()
                 if not hrp then return end
-                local bg=Instance.new("BodyGyro"); bg.MaxTorque=Vector3.new(1e9,1e9,1e9); bg.P=1e4; bg.Parent=hrp
-                local bv=Instance.new("BodyVelocity"); bv.Velocity=Vector3.zero; bv.MaxForce=Vector3.new(1e9,1e9,1e9); bv.Parent=hrp
-                Connections.Fly=RunService.Heartbeat:Connect(function()
-                    local cam=workspace.CurrentCamera
-                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then bv.Velocity=cam.CFrame.LookVector*Settings.FlySpeed
-                    elseif UserInputService:IsKeyDown(Enum.KeyCode.S) then bv.Velocity=-cam.CFrame.LookVector*Settings.FlySpeed
-                    elseif UserInputService:IsKeyDown(Enum.KeyCode.A) then bv.Velocity=-cam.CFrame.RightVector*Settings.FlySpeed
-                    elseif UserInputService:IsKeyDown(Enum.KeyCode.D) then bv.Velocity=cam.CFrame.RightVector*Settings.FlySpeed
-                    elseif UserInputService:IsKeyDown(Enum.KeyCode.Space) then bv.Velocity=Vector3.new(0,Settings.FlySpeed,0)
-                    elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then bv.Velocity=Vector3.new(0,-Settings.FlySpeed,0)
-                    else bv.Velocity=Vector3.zero end
-                    bg.CFrame=cam.CFrame
+                local bg = Instance.new("BodyGyro")
+                bg.MaxTorque = Vector3.new(1e9,1e9,1e9)
+                bg.P = 1e4; bg.Parent = hrp
+                local bv = Instance.new("BodyVelocity")
+                bv.Velocity = Vector3.zero
+                bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+                bv.Parent = hrp
+                Settings.FlyBG = bg
+                Settings.FlyBV = bv
+
+                Connections.Fly = RunService.Heartbeat:Connect(function()
+                    local cam = workspace.CurrentCamera
+                    local vel = Vector3.zero
+
+                    -- Keyboard (PC)
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        vel = cam.CFrame.LookVector * Settings.FlySpeed
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        vel = -cam.CFrame.LookVector * Settings.FlySpeed
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        vel = -cam.CFrame.RightVector * Settings.FlySpeed
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        vel = cam.CFrame.RightVector * Settings.FlySpeed
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                        vel = Vector3.new(0, Settings.FlySpeed, 0)
+                    elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                        vel = Vector3.new(0, -Settings.FlySpeed, 0)
+                    end
+
+                    -- GUI buttons (Mobile)
+                    if Settings.FlyDir then
+                        if Settings.FlyDir == "forward" then
+                            vel = cam.CFrame.LookVector * Settings.FlySpeed
+                        elseif Settings.FlyDir == "back" then
+                            vel = -cam.CFrame.LookVector * Settings.FlySpeed
+                        elseif Settings.FlyDir == "left" then
+                            vel = -cam.CFrame.RightVector * Settings.FlySpeed
+                        elseif Settings.FlyDir == "right" then
+                            vel = cam.CFrame.RightVector * Settings.FlySpeed
+                        elseif Settings.FlyDir == "up" then
+                            vel = Vector3.new(0, Settings.FlySpeed, 0)
+                        elseif Settings.FlyDir == "down" then
+                            vel = Vector3.new(0, -Settings.FlySpeed, 0)
+                        end
+                    end
+
+                    bv.Velocity = vel
+                    bg.CFrame = cam.CFrame
                 end)
             end)
         else
             if Connections.Fly then pcall(function() Connections.Fly:Disconnect() end); Connections.Fly=nil end
-            if hrp then for _,obj in ipairs(hrp:GetChildren()) do if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then pcall(function() obj:Destroy() end) end end end
+            Settings.FlyDir=nil; Settings.FlyBG=nil; Settings.FlyBV=nil
+            if hrp then
+                for _, obj in ipairs(hrp:GetChildren()) do
+                    if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then
+                        pcall(function() obj:Destroy() end)
+                    end
+                end
+            end
         end
 
     elseif key == "InfJump" then
@@ -241,7 +283,7 @@ local function ApplyFeature(key, val)
                 pcall(function()
                     local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
                     if tool then
-                        local remote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChildOfClass("RemoteEvent")
+                        local remote = tool:FindFirstChildOfClass("RemoteEvent")
                         if remote then remote:FireServer() end
                     end
                 end)
@@ -265,106 +307,33 @@ local KeyScreen = New("Frame", {
     BackgroundColor3=C.BG_Main, BorderSizePixel=0,
 }, GUI)
 
--- Grid background pattern
-for i = 1, 20 do
-    New("Frame", {
-        Size=UDim2.new(0,1,1,0),
-        Position=UDim2.new(i/20,0,0,0),
-        BackgroundColor3=C.Border,
-        BackgroundTransparency=0.85,
-        BorderSizePixel=0,
-    }, KeyScreen)
-end
-for i = 1, 20 do
-    New("Frame", {
-        Size=UDim2.new(1,0,0,1),
-        Position=UDim2.new(0,0,i/20,0),
-        BackgroundColor3=C.Border,
-        BackgroundTransparency=0.85,
-        BorderSizePixel=0,
-    }, KeyScreen)
+for i=1,20 do
+    New("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(i/20,0,0,0),BackgroundColor3=C.Border,BackgroundTransparency=0.85,BorderSizePixel=0},KeyScreen)
+    New("Frame",{Size=UDim2.new(1,0,0,1),Position=UDim2.new(0,0,i/20,0),BackgroundColor3=C.Border,BackgroundTransparency=0.85,BorderSizePixel=0},KeyScreen)
 end
 
--- Glow circle
-local glowCircle = New("Frame", {
-    Size=UDim2.new(0,200,0,200),
-    Position=UDim2.new(0.5,-100,0.2,-100),
-    BackgroundColor3=C.Accent,
-    BackgroundTransparency=0.85,
-    BorderSizePixel=0,
-}, KeyScreen)
-Corner(glowCircle, 100)
+local glowCircle=New("Frame",{Size=UDim2.new(0,200,0,200),Position=UDim2.new(0.5,-100,0.2,-100),BackgroundColor3=C.Accent,BackgroundTransparency=0.85,BorderSizePixel=0},KeyScreen)
+Corner(glowCircle,100)
 
--- Shield icon
-local shieldLbl = New("TextLabel", {
-    Size=UDim2.new(0,80,0,80), Position=UDim2.new(0.5,-40,0.2,-40),
-    BackgroundTransparency=1, Text="🛡️", TextSize=56,
-    Font=Enum.Font.GothamBold,
-}, KeyScreen)
-
+local shieldLbl=New("TextLabel",{Size=UDim2.new(0,80,0,80),Position=UDim2.new(0.5,-40,0.2,-40),BackgroundTransparency=1,Text="🛡️",TextSize=56,Font=Enum.Font.GothamBold},KeyScreen)
 task.spawn(function()
     while shieldLbl and shieldLbl.Parent do
-        Tween(shieldLbl, {TextTransparency=0.2}, 1.5)
-        task.wait(1.5)
-        Tween(shieldLbl, {TextTransparency=0}, 1.5)
-        task.wait(1.5)
+        Tween(shieldLbl,{TextTransparency=0.2},1.5); task.wait(1.5)
+        Tween(shieldLbl,{TextTransparency=0},1.5); task.wait(1.5)
     end
 end)
 
-New("TextLabel", {
-    Size=UDim2.new(0,440,0,40), Position=UDim2.new(0.5,-220,0.38,0),
-    BackgroundTransparency=1, Text="H4LL0 ADMIN HUB",
-    TextColor3=C.AccentGlow, TextSize=26, Font=Enum.Font.GothamBold,
-    TextStrokeTransparency=0.5, TextStrokeColor3=C.Accent,
-}, KeyScreen)
+New("TextLabel",{Size=UDim2.new(0,440,0,40),Position=UDim2.new(0.5,-220,0.38,0),BackgroundTransparency=1,Text="H4LL0 ADMIN HUB",TextColor3=C.AccentGlow,TextSize=26,Font=Enum.Font.GothamBold,TextStrokeTransparency=0.5,TextStrokeColor3=C.Accent},KeyScreen)
+New("TextLabel",{Size=UDim2.new(0,440,0,22),Position=UDim2.new(0.5,-220,0.46,0),BackgroundTransparency=1,Text="ADMIN PANEL  •  KEY NEEDED",TextColor3=C.TextSub,TextSize=12,Font=Enum.Font.Gotham},KeyScreen)
 
-New("TextLabel", {
-    Size=UDim2.new(0,440,0,22), Position=UDim2.new(0.5,-220,0.46,0),
-    BackgroundTransparency=1, Text="ADMIN PANEL  •  KEY NEEDED",
-    TextColor3=C.TextSub, TextSize=12, Font=Enum.Font.Gotham,
-}, KeyScreen)
-
-local KBG = New("Frame", {
-    Size=UDim2.new(0,340,0,36), Position=UDim2.new(0.5,-170,0.54,0),
-    BackgroundColor3=C.BG_Card, BorderSizePixel=0,
-}, KeyScreen)
+local KBG=New("Frame",{Size=UDim2.new(0,340,0,36),Position=UDim2.new(0.5,-170,0.54,0),BackgroundColor3=C.BG_Card,BorderSizePixel=0},KeyScreen)
 Corner(KBG,8); Stroke(KBG,C.Accent,1.5)
+local KInput=New("TextBox",{Size=UDim2.new(1,-14,1,0),Position=UDim2.new(0,10,0,0),BackgroundTransparency=1,PlaceholderText="🛡️  Enter admin key...",PlaceholderColor3=C.TextDim,Text="",TextColor3=C.TextMain,TextXAlignment=Enum.TextXAlignment.Left,TextSize=13,Font=Enum.Font.GothamBold,ClearTextOnFocus=false},KBG)
 
-local KInput = New("TextBox", {
-    Size=UDim2.new(1,-14,1,0), Position=UDim2.new(0,10,0,0),
-    BackgroundTransparency=1, PlaceholderText="🛡️  Enter admin key...",
-    PlaceholderColor3=C.TextDim, Text="", TextColor3=C.TextMain,
-    TextXAlignment=Enum.TextXAlignment.Left, TextSize=13,
-    Font=Enum.Font.GothamBold, ClearTextOnFocus=false,
-}, KBG)
-
-local DiscordBtn = New("TextButton", {
-    Size=UDim2.new(0,130,0,30), Position=UDim2.new(0.5,-170,0.64,0),
-    BackgroundColor3=C.AccentDim, Text="💬 Get Key (Discord)",
-    TextColor3=C.TextMain, TextSize=11, Font=Enum.Font.GothamBold, BorderSizePixel=0,
-}, KeyScreen)
-Corner(DiscordBtn,7); Stroke(DiscordBtn,C.Border,1)
-
-local PasteBtn = New("TextButton", {
-    Size=UDim2.new(0,72,0,30), Position=UDim2.new(0.5,-32,0.64,0),
-    BackgroundColor3=C.BG_Card, Text="📋 Paste",
-    TextColor3=C.TextMain, TextSize=11, Font=Enum.Font.GothamBold, BorderSizePixel=0,
-}, KeyScreen)
-Corner(PasteBtn,7); Stroke(PasteBtn,C.Border,1)
-
-local EnterBtn = New("TextButton", {
-    Size=UDim2.new(0,72,0,30), Position=UDim2.new(0.5,48,0.64,0),
-    BackgroundColor3=C.Accent, Text="▶ Enter",
-    TextColor3=Color3.fromRGB(200,220,255), TextSize=11,
-    Font=Enum.Font.GothamBold, BorderSizePixel=0,
-}, KeyScreen)
-Corner(EnterBtn,7)
-
-local KStatus = New("TextLabel", {
-    Size=UDim2.new(0,340,0,22), Position=UDim2.new(0.5,-170,0.72,0),
-    BackgroundTransparency=1, Text="Enter admin key to access panel...",
-    TextColor3=C.TextDim, TextSize=11, Font=Enum.Font.Gotham,
-}, KeyScreen)
+local DiscordBtn=New("TextButton",{Size=UDim2.new(0,130,0,30),Position=UDim2.new(0.5,-170,0.64,0),BackgroundColor3=C.AccentDim,Text="💬 Get Key (Discord)",TextColor3=C.TextMain,TextSize=11,Font=Enum.Font.GothamBold,BorderSizePixel=0},KeyScreen); Corner(DiscordBtn,7); Stroke(DiscordBtn,C.Border,1)
+local PasteBtn=New("TextButton",{Size=UDim2.new(0,72,0,30),Position=UDim2.new(0.5,-32,0.64,0),BackgroundColor3=C.BG_Card,Text="📋 Paste",TextColor3=C.TextMain,TextSize=11,Font=Enum.Font.GothamBold,BorderSizePixel=0},KeyScreen); Corner(PasteBtn,7); Stroke(PasteBtn,C.Border,1)
+local EnterBtn=New("TextButton",{Size=UDim2.new(0,72,0,30),Position=UDim2.new(0.5,48,0.64,0),BackgroundColor3=C.Accent,Text="▶ Enter",TextColor3=Color3.fromRGB(200,220,255),TextSize=11,Font=Enum.Font.GothamBold,BorderSizePixel=0},KeyScreen); Corner(EnterBtn,7)
+local KStatus=New("TextLabel",{Size=UDim2.new(0,340,0,22),Position=UDim2.new(0.5,-170,0.72,0),BackgroundTransparency=1,Text="Enter admin key to access panel...",TextColor3=C.TextDim,TextSize=11,Font=Enum.Font.Gotham},KeyScreen)
 
 DiscordBtn.MouseButton1Click:Connect(function()
     pcall(function() setclipboard("https://discord.gg/xCV9Tf4y5N") end)
@@ -381,16 +350,11 @@ end)
 local function BuildMain()
     KeyScreen:Destroy()
 
-    local Win = New("Frame", {
-        Size=UDim2.new(0,640,0,460),
-        Position=UDim2.new(0.5,-320,0.5,-230),
-        BackgroundColor3=C.BG_Main, BorderSizePixel=0, Active=true,
-    }, GUI)
+    local Win=New("Frame",{Size=UDim2.new(0,640,0,460),Position=UDim2.new(0.5,-320,0.5,-230),BackgroundColor3=C.BG_Main,BorderSizePixel=0,Active=true},GUI)
     Corner(Win,12); Stroke(Win,C.Accent,1.5)
 
-    -- Grid bg
     for i=1,20 do
-        New("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(i/20,0,0,0),BackgroundColor3=C.Border,BackgroundTransparency=0.9,BorderSizePixel=0},Win)
+        New("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(i/20,0,0,0),BackgroundColor3=C.Border,BackgroundTransparency=0.92,BorderSizePixel=0},Win)
     end
 
     local drag,dStart,dPos=false,nil,nil
@@ -398,43 +362,23 @@ local function BuildMain()
     UserInputService.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then local d=i.Position-dStart; Win.Position=UDim2.new(dPos.X.Scale,dPos.X.Offset+d.X,dPos.Y.Scale,dPos.Y.Offset+d.Y) end end)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
 
-    -- TopBar
-    local Top=New("Frame",{Size=UDim2.new(1,0,0,42),BackgroundColor3=C.BG_Side,BorderSizePixel=0,ZIndex=5},Win)
-    Corner(Top,12)
+    local Top=New("Frame",{Size=UDim2.new(1,0,0,42),BackgroundColor3=C.BG_Side,BorderSizePixel=0,ZIndex=5},Win); Corner(Top,12)
     New("Frame",{Size=UDim2.new(1,0,0.5,0),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=C.BG_Side,BorderSizePixel=0,ZIndex=4},Top)
-
-    -- Admin badge strip
-    local strip=New("Frame",{Size=UDim2.new(1,0,0,3),Position=UDim2.new(0,0,1,-3),BackgroundColor3=C.Accent,BorderSizePixel=0,ZIndex=6},Top)
-
+    New("Frame",{Size=UDim2.new(1,0,0,3),Position=UDim2.new(0,0,1,-3),BackgroundColor3=C.Accent,BorderSizePixel=0,ZIndex=6},Top)
     New("TextLabel",{Size=UDim2.new(0,28,1,0),Position=UDim2.new(0,8,0,0),BackgroundTransparency=1,Text="🛡️",TextSize=20,ZIndex=6},Top)
     New("TextLabel",{Size=UDim2.new(0,220,1,0),Position=UDim2.new(0,40,0,0),BackgroundTransparency=1,Text="H4ll0 Admin Hub",TextColor3=C.AccentGlow,TextXAlignment=Enum.TextXAlignment.Left,TextSize=14,Font=Enum.Font.GothamBold,ZIndex=6},Top)
-
-    -- Admin label
-    local adminLbl=New("Frame",{Size=UDim2.new(0,70,0,20),Position=UDim2.new(0,264,0.5,-10),BackgroundColor3=Color3.fromRGB(5,15,35),BorderSizePixel=0,ZIndex=6},Top)
-    Corner(adminLbl,5); Stroke(adminLbl,C.Accent,1)
+    local adminLbl=New("Frame",{Size=UDim2.new(0,70,0,20),Position=UDim2.new(0,264,0.5,-10),BackgroundColor3=Color3.fromRGB(5,15,35),BorderSizePixel=0,ZIndex=6},Top); Corner(adminLbl,5); Stroke(adminLbl,C.Accent,1)
     New("TextLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="⚙ ADMIN",TextColor3=C.Accent,TextSize=9,Font=Enum.Font.GothamBold,ZIndex=7},adminLbl)
-
-    -- User info
     New("TextLabel",{Size=UDim2.new(0,150,1,0),Position=UDim2.new(1,-300,0,0),BackgroundTransparency=1,Text="👤 "..LocalPlayer.Name,TextColor3=C.TextSub,TextXAlignment=Enum.TextXAlignment.Right,TextSize=11,Font=Enum.Font.Gotham,ZIndex=6},Top)
-
     local MinBtn=New("TextButton",{Size=UDim2.new(0,26,0,22),Position=UDim2.new(1,-60,0.5,-11),BackgroundColor3=C.BG_Card,Text="─",TextColor3=C.TextMain,TextSize=13,Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=6},Top); Corner(MinBtn,5)
     local CloseBtn=New("TextButton",{Size=UDim2.new(0,26,0,22),Position=UDim2.new(1,-28,0.5,-11),BackgroundColor3=C.Red,Text="✕",TextColor3=Color3.fromRGB(255,200,200),TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0,ZIndex=6},Top); Corner(CloseBtn,5)
-
-    CloseBtn.MouseButton1Click:Connect(function()
-        StopAll(); Tween(Win,{Size=UDim2.new(0,640,0,0)},0.3); task.wait(0.35); GUI:Destroy()
-    end)
-    MinBtn.MouseButton1Click:Connect(function()
-        Minimized=not Minimized
-        if Minimized then Tween(Win,{Size=UDim2.new(0,640,0,42)},0.3); MinBtn.Text="□"
-        else Tween(Win,{Size=UDim2.new(0,640,0,460)},0.3); MinBtn.Text="─" end
-    end)
+    CloseBtn.MouseButton1Click:Connect(function() StopAll(); Tween(Win,{Size=UDim2.new(0,640,0,0)},0.3); task.wait(0.35); GUI:Destroy() end)
+    MinBtn.MouseButton1Click:Connect(function() Minimized=not Minimized; if Minimized then Tween(Win,{Size=UDim2.new(0,640,0,42)},0.3); MinBtn.Text="□" else Tween(Win,{Size=UDim2.new(0,640,0,460)},0.3); MinBtn.Text="─" end end)
 
     local CH=New("Frame",{Size=UDim2.new(1,0,1,-42),Position=UDim2.new(0,0,0,42),BackgroundTransparency=1,ClipsDescendants=true},Win)
-    local Side=New("Frame",{Size=UDim2.new(0,130,1,0),BackgroundColor3=C.BG_Side,BorderSizePixel=0},CH)
-    Stroke(Side,C.Border,1)
+    local Side=New("Frame",{Size=UDim2.new(0,130,1,0),BackgroundColor3=C.BG_Side,BorderSizePixel=0},CH); Stroke(Side,C.Border,1)
     New("UIListLayout",{Padding=UDim.new(0,3)},Side)
     New("UIPadding",{PaddingTop=UDim.new(0,8),PaddingLeft=UDim.new(0,5),PaddingRight=UDim.new(0,5)},Side)
-
     local CA=New("Frame",{Size=UDim2.new(1,-130,1,0),Position=UDim2.new(0,130,0,0),BackgroundColor3=C.BG_Content,BorderSizePixel=0,ClipsDescendants=true},CH)
     New("UIPadding",{PaddingAll=UDim.new(0,10)},CA)
 
@@ -464,8 +408,7 @@ local function BuildMain()
         New("TextLabel",{Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,Text="  ▸  "..txt,TextColor3=col or C.Accent,TextXAlignment=Enum.TextXAlignment.Left,TextSize=10,Font=Enum.Font.GothamBold},f)
     end
     local function Toggle(parent,label,key,desc,col)
-        local card=New("Frame",{Size=UDim2.new(1,0,0,desc and 52 or 40),BackgroundColor3=C.BG_Card,BorderSizePixel=0},parent)
-        Corner(card,8); Stroke(card,C.Border,1)
+        local card=New("Frame",{Size=UDim2.new(1,0,0,desc and 52 or 40),BackgroundColor3=C.BG_Card,BorderSizePixel=0},parent); Corner(card,8); Stroke(card,C.Border,1)
         New("TextLabel",{Size=UDim2.new(1,-70,0,20),Position=UDim2.new(0,10,0,5),BackgroundTransparency=1,Text=label,TextColor3=C.TextMain,TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,Font=Enum.Font.GothamBold},card)
         if desc then New("TextLabel",{Size=UDim2.new(1,-70,0,16),Position=UDim2.new(0,10,0,26),BackgroundTransparency=1,Text=desc,TextColor3=C.TextDim,TextXAlignment=Enum.TextXAlignment.Left,TextSize=10,Font=Enum.Font.Gotham},card) end
         local onCol=col or C.ON
@@ -505,27 +448,22 @@ local function BuildMain()
         end)
     end
 
-    -- Player selector builder
     local selectedPlayerLbl = nil
-    local function BuildPlayerSelector(parent, onSelect)
-        local card=New("Frame",{Size=UDim2.new(1,0,0,96),BackgroundColor3=C.BG_Card,BorderSizePixel=0},parent)
-        Corner(card,8); Stroke(card,C.Border,1)
+    local function BuildPlayerSelector(parent)
+        local card=New("Frame",{Size=UDim2.new(1,0,0,96),BackgroundColor3=C.BG_Card,BorderSizePixel=0},parent); Corner(card,8); Stroke(card,C.Border,1)
         New("TextLabel",{Size=UDim2.new(1,0,0,20),Position=UDim2.new(0,10,0,4),BackgroundTransparency=1,Text="👥 Select Player",TextColor3=C.TextMain,TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,Font=Enum.Font.GothamBold},card)
-
-        local list=New("ScrollingFrame",{Size=UDim2.new(1,-20,0,44),Position=UDim2.new(0,10,0,26),BackgroundColor3=C.BG_Main,BorderSizePixel=0,ScrollBarThickness=3,ScrollBarImageColor3=C.Accent,CanvasSize=UDim2.new(0,0,0,0)},card)
-        Corner(list,5)
+        local list=New("ScrollingFrame",{Size=UDim2.new(1,-20,0,44),Position=UDim2.new(0,10,0,26),BackgroundColor3=C.BG_Main,BorderSizePixel=0,ScrollBarThickness=3,ScrollBarImageColor3=C.Accent,CanvasSize=UDim2.new(0,0,0,0)},card); Corner(list,5)
         local ll=New("UIListLayout",{FillDirection=Enum.FillDirection.Horizontal,Padding=UDim.new(0,4)},list)
         New("UIPadding",{PaddingLeft=UDim.new(0,4)},list)
-
         local function Refresh()
             for _,c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
             for _,plr in ipairs(GetOtherPlayers()) do
-                local isSelected = Settings.SelectedPlayer == plr
-                local b=New("TextButton",{Size=UDim2.new(0,80,0,36),BackgroundColor3=isSelected and C.Accent or C.BG_Card,Text=plr.Name,TextColor3=isSelected and Color3.fromRGB(200,220,255) or C.TextSub,TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},list)
-                Corner(b,5); Stroke(b,isSelected and C.Accent or C.Border,1)
+                local isSel=Settings.SelectedPlayer==plr
+                local b=New("TextButton",{Size=UDim2.new(0,80,0,36),BackgroundColor3=isSel and C.Accent or C.BG_Card,Text=plr.Name,TextColor3=isSel and Color3.fromRGB(200,220,255) or C.TextSub,TextSize=9,Font=Enum.Font.GothamBold,BorderSizePixel=0},list)
+                Corner(b,5); Stroke(b,isSel and C.Accent or C.Border,1)
                 b.MouseButton1Click:Connect(function()
                     Settings.SelectedPlayer=plr
-                    if onSelect then onSelect(plr) end
+                    if selectedPlayerLbl then selectedPlayerLbl.Text="Selected: "..plr.Name end
                     Refresh()
                 end)
             end
@@ -534,7 +472,6 @@ local function BuildMain()
         end
         Refresh()
         Btn(card,"🔄 Refresh",nil,Refresh)
-        return card
     end
 
     -- ══════════════════════
@@ -542,96 +479,56 @@ local function BuildMain()
     -- ══════════════════════
     local PP=Pages["Players"]
     Section(PP,"SELECT PLAYER")
-    BuildPlayerSelector(PP, function(plr)
-        if selectedPlayerLbl then selectedPlayerLbl.Text = "Selected: "..plr.Name end
-    end)
-
-    -- Selected player label
-    local selCard=New("Frame",{Size=UDim2.new(1,0,0,32),BackgroundColor3=C.BG_Card,BorderSizePixel=0},PP)
-    Corner(selCard,8); Stroke(selCard,C.Accent,1)
+    BuildPlayerSelector(PP)
+    local selCard=New("Frame",{Size=UDim2.new(1,0,0,32),BackgroundColor3=C.BG_Card,BorderSizePixel=0},PP); Corner(selCard,8); Stroke(selCard,C.Accent,1)
     selectedPlayerLbl=New("TextLabel",{Size=UDim2.new(1,-16,1,0),Position=UDim2.new(0,8,0,0),BackgroundTransparency=1,Text="Selected: None",TextColor3=C.AccentGlow,TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,Font=Enum.Font.GothamBold},selCard)
-
     Section(PP,"ACTIONS")
     Btn(PP,"🚪 Kick Player",C.Red,function()
-        local plr=Settings.SelectedPlayer
-        if plr then pcall(function() plr:Kick("🛡️ You have been kicked by H4ll0 Admin Hub.") end) end
+        local plr=Settings.SelectedPlayer; if plr then pcall(function() plr:Kick("🛡️ Kicked by H4ll0 Admin Hub.") end) end
     end)
     Btn(PP,"🔨 Ban Player",Color3.fromRGB(150,30,30),function()
         local plr=Settings.SelectedPlayer
-        if plr then
-            Settings.BannedPlayers[plr.UserId]=true
-            Settings.BannedPlayers[plr.Name]=true
-            pcall(function() plr:Kick("🛡️ You have been banned from this server.") end)
-        end
+        if plr then Settings.BannedPlayers[plr.UserId]=true; Settings.BannedPlayers[plr.Name]=true; pcall(function() plr:Kick("🛡️ Banned from this server.") end) end
     end)
     Btn(PP,"📍 Teleport to Me",C.Accent,function()
         local plr=Settings.SelectedPlayer
         if plr and plr.Character then
-            local root=plr.Character:FindFirstChild("HumanoidRootPart")
-            local _,hrp2,_=GetChar()
+            local root=plr.Character:FindFirstChild("HumanoidRootPart"); local _,hrp2,_=GetChar()
             if root and hrp2 then root.CFrame=CFrame.new(hrp2.Position+Vector3.new(3,0,0)) end
         end
     end)
     Btn(PP,"❄️ Freeze Player",Color3.fromRGB(50,100,200),function()
         local plr=Settings.SelectedPlayer
-        if plr and plr.Character then
-            for _,p in ipairs(plr.Character:GetDescendants()) do
-                if p:IsA("BasePart") then pcall(function() p.Anchored=true end) end
-            end
-        end
+        if plr and plr.Character then for _,p in ipairs(plr.Character:GetDescendants()) do if p:IsA("BasePart") then pcall(function() p.Anchored=true end) end end end
     end)
     Btn(PP,"🔥 Unfreeze Player",C.AccentDim,function()
         local plr=Settings.SelectedPlayer
-        if plr and plr.Character then
-            for _,p in ipairs(plr.Character:GetDescendants()) do
-                if p:IsA("BasePart") then pcall(function() p.Anchored=false end) end
-            end
-        end
+        if plr and plr.Character then for _,p in ipairs(plr.Character:GetDescendants()) do if p:IsA("BasePart") then pcall(function() p.Anchored=false end) end end end
     end)
     Btn(PP,"💀 Kill Player",C.Red,function()
         local plr=Settings.SelectedPlayer
         if plr and plr.Character then
             local root=plr.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local bv=Instance.new("BodyVelocity")
-                bv.Velocity=Vector3.new(0,5000,0)
-                bv.MaxForce=Vector3.new(1e9,1e9,1e9)
-                bv.Parent=root
-                Debris:AddItem(bv,0.1)
-            end
+            if root then local bv=Instance.new("BodyVelocity"); bv.Velocity=Vector3.new(0,5000,0); bv.MaxForce=Vector3.new(1e9,1e9,1e9); bv.Parent=root; Debris:AddItem(bv,0.1) end
         end
     end)
     Btn(PP,"🚀 Fling Player",C.Orange,function()
         local plr=Settings.SelectedPlayer
         if plr and plr.Character then
             local root=plr.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local bv=Instance.new("BodyVelocity")
-                bv.Velocity=Vector3.new(math.random(-500,500),1000,math.random(-500,500))
-                bv.MaxForce=Vector3.new(1e9,1e9,1e9)
-                bv.Parent=root
-                Debris:AddItem(bv,0.1)
-            end
+            if root then local bv=Instance.new("BodyVelocity"); bv.Velocity=Vector3.new(math.random(-500,500),1000,math.random(-500,500)); bv.MaxForce=Vector3.new(1e9,1e9,1e9); bv.Parent=root; Debris:AddItem(bv,0.1) end
         end
     end)
     Btn(PP,"⚡ Speed Player",C.Cyan,function()
         local plr=Settings.SelectedPlayer
-        if plr and plr.Character then
-            local hum=plr.Character:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed=100 end
-        end
+        if plr and plr.Character then local hum=plr.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.WalkSpeed=100 end end
     end)
     Btn(PP,"🔧 Give Tool",C.AccentDim,function()
         local plr=Settings.SelectedPlayer
         if plr then
             pcall(function()
-                local tool=Instance.new("Tool")
-                tool.Name="AdminTool"
-                local handle=Instance.new("Part")
-                handle.Name="Handle"
-                handle.Size=Vector3.new(1,1,1)
-                handle.BrickColor=BrickColor.new("Bright blue")
-                handle.Parent=tool
+                local tool=Instance.new("Tool"); tool.Name="AdminTool"
+                local handle=Instance.new("Part"); handle.Name="Handle"; handle.Size=Vector3.new(1,1,1); handle.BrickColor=BrickColor.new("Bright blue"); handle.Parent=tool
                 tool.Parent=plr.Backpack
             end)
         end
@@ -655,41 +552,28 @@ local function BuildMain()
     local AP=Pages["Admin"]
     Section(AP,"SERVER CONTROL",C.Red)
     Btn(AP,"📢 Announce Message",C.Accent,function()
-        -- Fake announce via StarterGui
-        local sg=game:GetService("StarterGui")
         pcall(function()
-            sg:SetCore("ChatMakeSystemMessage",{
-                Text="[🛡️ ADMIN] H4ll0 Admin Hub is active on this server!",
+            game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage",{
+                Text="[🛡️ ADMIN] H4ll0 Admin Hub is active!",
                 Color=Color3.fromRGB(30,100,220),
                 Font=Enum.Font.GothamBold,
                 FontSize=Enum.FontSize.Size18,
             })
         end)
     end)
-    Btn(AP,"🌐 Shutdown Server",C.Red,function()
+    Btn(AP,"🌐 Server Hop",C.AccentDim,function()
         pcall(function()
-            game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+            local data=game:GetService("HttpService"):JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+            local servers={}
+            for _,s in ipairs(data.data) do if s.playing<s.maxPlayers then table.insert(servers,s.id) end end
+            if #servers>0 then game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId,servers[math.random(1,#servers)],LocalPlayer) end
         end)
     end)
     Btn(AP,"🔄 Rejoin",C.AccentDim,function()
         game:GetService("TeleportService"):Teleport(game.PlaceId,LocalPlayer)
     end)
-    Btn(AP,"🌐 Server Hop",C.AccentDim,function()
-        pcall(function()
-            local data=game:GetService("HttpService"):JSONDecode(
-                game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
-            local servers={}
-            for _,s in ipairs(data.data) do if s.playing<s.maxPlayers then table.insert(servers,s.id) end end
-            if #servers>0 then
-                game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId,servers[math.random(1,#servers)],LocalPlayer)
-            end
-        end)
-    end)
-
     Section(AP,"BAN LIST")
-    Btn(AP,"🗑️ Clear Ban List",C.AccentDim,function()
-        Settings.BannedPlayers={}
-    end)
+    Btn(AP,"🗑️ Clear Ban List",C.AccentDim,function() Settings.BannedPlayers={} end)
 
     -- ══════════════════
     --   👤 SELF TAB
@@ -698,18 +582,133 @@ local function BuildMain()
     Section(SELFP,"SELF ADMIN")
     Toggle(SELFP,"God Mode","GodMode","HP selalu penuh",C.Green)
     Toggle(SELFP,"Invisible","Invisible","Tidak terlihat player lain",C.Cyan)
-    Toggle(SELFP,"Fly","Fly","Terbang (WASD+Space+Shift)")
+    Toggle(SELFP,"Fly","Fly","Terbang — pakai controller di bawah!")
     Slider(SELFP,"✈️ Fly Speed",10,200,50,function(v) Settings.FlySpeed=v end,"")
+
+    -- ════════════════════════════
+    --   FLY CONTROLLER (MOBILE)
+    -- ════════════════════════════
+    Section(SELFP,"FLY CONTROLLER 📱",C.Cyan)
+
+    local flyCard=New("Frame",{
+        Size=UDim2.new(1,0,0,140),
+        BackgroundColor3=C.BG_Card,BorderSizePixel=0,
+    },SELFP)
+    Corner(flyCard,8); Stroke(flyCard,C.Accent,1)
+
+    New("TextLabel",{
+        Size=UDim2.new(1,0,0,18),Position=UDim2.new(0,10,0,4),
+        BackgroundTransparency=1,Text="✈️ Tahan tombol untuk gerak",
+        TextColor3=C.TextSub,TextXAlignment=Enum.TextXAlignment.Left,
+        TextSize=10,Font=Enum.Font.Gotham,
+    },flyCard)
+
+    -- UP button (top right)
+    local upBtn=New("TextButton",{
+        Size=UDim2.new(0,46,0,36),Position=UDim2.new(1,-56,0,22),
+        BackgroundColor3=C.Green,Text="↑\nNaik",
+        TextColor3=Color3.fromRGB(255,255,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(upBtn,7)
+
+    -- DOWN button (bottom right)
+    local downBtn=New("TextButton",{
+        Size=UDim2.new(0,46,0,36),Position=UDim2.new(1,-56,0,96),
+        BackgroundColor3=C.Red,Text="↓\nTurun",
+        TextColor3=Color3.fromRGB(255,255,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(downBtn,7)
+
+    -- Forward
+    local fwdBtn=New("TextButton",{
+        Size=UDim2.new(0,52,0,36),Position=UDim2.new(0.5,-26,0,24),
+        BackgroundColor3=C.Accent,Text="▲\nMaju",
+        TextColor3=Color3.fromRGB(200,220,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(fwdBtn,7)
+
+    -- Left
+    local leftBtn=New("TextButton",{
+        Size=UDim2.new(0,52,0,36),Position=UDim2.new(0.5,-82,0,64),
+        BackgroundColor3=C.AccentDim,Text="◀\nKiri",
+        TextColor3=Color3.fromRGB(200,220,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(leftBtn,7)
+
+    -- Stop
+    local stopFlyBtn=New("TextButton",{
+        Size=UDim2.new(0,52,0,36),Position=UDim2.new(0.5,-26,0,64),
+        BackgroundColor3=C.BG_Main,Text="■\nStop",
+        TextColor3=Color3.fromRGB(200,220,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(stopFlyBtn,7); Stroke(stopFlyBtn,C.Border,1)
+
+    -- Right
+    local rightBtn=New("TextButton",{
+        Size=UDim2.new(0,52,0,36),Position=UDim2.new(0.5,30,0,64),
+        BackgroundColor3=C.AccentDim,Text="▶\nKanan",
+        TextColor3=Color3.fromRGB(200,220,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(rightBtn,7)
+
+    -- Back
+    local backBtn=New("TextButton",{
+        Size=UDim2.new(0,52,0,36),Position=UDim2.new(0.5,-26,0,104),
+        BackgroundColor3=C.Accent,Text="▼\nMundur",
+        TextColor3=Color3.fromRGB(200,220,255),TextSize=10,
+        Font=Enum.Font.GothamBold,BorderSizePixel=0,
+    },flyCard); Corner(backBtn,7)
+
+    -- Button connections - TAHAN untuk gerak, LEPAS untuk stop
+    local function setDir(dir) Settings.FlyDir=dir end
+    local function stopDir() Settings.FlyDir=nil end
+
+    -- Forward
+    fwdBtn.MouseButton1Down:Connect(function() setDir("forward") end)
+    fwdBtn.MouseButton1Up:Connect(stopDir)
+    fwdBtn.TouchLongPress:Connect(function() setDir("forward") end)
+    fwdBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Back
+    backBtn.MouseButton1Down:Connect(function() setDir("back") end)
+    backBtn.MouseButton1Up:Connect(stopDir)
+    backBtn.TouchLongPress:Connect(function() setDir("back") end)
+    backBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Left
+    leftBtn.MouseButton1Down:Connect(function() setDir("left") end)
+    leftBtn.MouseButton1Up:Connect(stopDir)
+    leftBtn.TouchLongPress:Connect(function() setDir("left") end)
+    leftBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Right
+    rightBtn.MouseButton1Down:Connect(function() setDir("right") end)
+    rightBtn.MouseButton1Up:Connect(stopDir)
+    rightBtn.TouchLongPress:Connect(function() setDir("right") end)
+    rightBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Up
+    upBtn.MouseButton1Down:Connect(function() setDir("up") end)
+    upBtn.MouseButton1Up:Connect(stopDir)
+    upBtn.TouchLongPress:Connect(function() setDir("up") end)
+    upBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Down
+    downBtn.MouseButton1Down:Connect(function() setDir("down") end)
+    downBtn.MouseButton1Up:Connect(stopDir)
+    downBtn.TouchLongPress:Connect(function() setDir("down") end)
+    downBtn.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then stopDir() end end)
+
+    -- Stop
+    stopFlyBtn.MouseButton1Click:Connect(stopDir)
+
+    -- More self features
     Toggle(SELFP,"Infinite Jump","InfJump","Loncat tanpa batas")
     Slider(SELFP,"🏃 Walk Speed",16,300,16,function(v)
-        Settings.WalkSpeed=v
-        local _,_,hum=GetChar()
-        if hum then hum.WalkSpeed=v end
+        Settings.WalkSpeed=v; local _,_,hum=GetChar(); if hum then hum.WalkSpeed=v end
     end,"")
     Btn(SELFP,"🔄 Restore Defaults",C.AccentDim,function()
-        local _,_,hum=GetChar()
-        if hum then hum.WalkSpeed=16; hum.JumpPower=50 end
-        workspace.Gravity=196.2
+        local _,_,hum=GetChar(); if hum then hum.WalkSpeed=16; hum.JumpPower=50 end; workspace.Gravity=196.2
     end)
 
     -- ══════════════════
@@ -717,52 +716,30 @@ local function BuildMain()
     -- ══════════════════
     local CMDP=Pages["Cmd"]
     Section(CMDP,"CMD2 COMMANDS",C.Cyan)
-
-    local cmdInfo=New("Frame",{Size=UDim2.new(1,0,0,120),BackgroundColor3=C.BG_Card,BorderSizePixel=0},CMDP)
-    Corner(cmdInfo,8); Stroke(cmdInfo,C.Border,1)
+    local cmdInfo=New("Frame",{Size=UDim2.new(1,0,0,120),BackgroundColor3=C.BG_Card,BorderSizePixel=0},CMDP); Corner(cmdInfo,8); Stroke(cmdInfo,C.Border,1)
     New("TextLabel",{Size=UDim2.new(1,-16,1,0),Position=UDim2.new(0,8,0,0),BackgroundTransparency=1,
-        Text="💬 CMD CHEATSHEET:\n:kick [name] — Kick player\n:ban [name] — Ban player\n:ff [name] — ForceField\n:unff [name] — Remove FF\n:god [name] — God mode\n:ungod [name] — Remove god\n:speed [name] [num] — Set speed\n:tp [name] [name2] — Teleport\n:bring [name] — Bring ke kamu\n:kill [name] — Kill player\n:respawn [name] — Respawn\n:freeze [name] — Freeze\n:thaw [name] — Unfreeze",
-        TextColor3=C.TextSub,TextXAlignment=Enum.TextXAlignment.Left,
-        TextSize=10,TextWrapped=true,Font=Enum.Font.GothamBold},cmdInfo)
+        Text=":kick [name]  :ban [name]\n:ff [name]  :unff [name]\n:god [name]  :ungod [name]\n:speed [name] [num]\n:bring [name]  :kill [name]\n:freeze [name]  :thaw [name]\n:respawn [name]",
+        TextColor3=C.TextSub,TextXAlignment=Enum.TextXAlignment.Left,TextSize=11,TextWrapped=true,Font=Enum.Font.GothamBold},cmdInfo)
 
-    -- CMD Input box
     Section(CMDP,"EXECUTE CMD")
-    local cmdCard=New("Frame",{Size=UDim2.new(1,0,0,72),BackgroundColor3=C.BG_Card,BorderSizePixel=0},CMDP)
-    Corner(cmdCard,8); Stroke(cmdCard,C.Accent,1)
+    local cmdCard=New("Frame",{Size=UDim2.new(1,0,0,72),BackgroundColor3=C.BG_Card,BorderSizePixel=0},CMDP); Corner(cmdCard,8); Stroke(cmdCard,C.Accent,1)
     New("TextLabel",{Size=UDim2.new(1,-16,0,20),Position=UDim2.new(0,8,0,4),BackgroundTransparency=1,Text="💬 Command Input",TextColor3=C.TextMain,TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,Font=Enum.Font.GothamBold},cmdCard)
-    local cmdInput=New("TextBox",{
-        Size=UDim2.new(1,-20,0,28),Position=UDim2.new(0,10,0,26),
-        BackgroundColor3=C.BG_Main,BorderSizePixel=0,
-        PlaceholderText=":kick PlayerName",
-        PlaceholderColor3=C.TextDim,Text="",
-        TextColor3=C.AccentGlow,TextXAlignment=Enum.TextXAlignment.Left,
-        TextSize=12,Font=Enum.Font.GothamBold,ClearTextOnFocus=false,
-    },cmdCard)
-    Corner(cmdInput,6); Stroke(cmdInput,C.Border,1)
+    local cmdInput=New("TextBox",{Size=UDim2.new(1,-20,0,28),Position=UDim2.new(0,10,0,26),BackgroundColor3=C.BG_Main,BorderSizePixel=0,PlaceholderText=":kick PlayerName",PlaceholderColor3=C.TextDim,Text="",TextColor3=C.AccentGlow,TextXAlignment=Enum.TextXAlignment.Left,TextSize=12,Font=Enum.Font.GothamBold,ClearTextOnFocus=false},cmdCard); Corner(cmdInput,6); Stroke(cmdInput,C.Border,1)
 
     Btn(CMDP,"▶ Execute Command",C.Accent,function()
-        local cmd=cmdInput.Text
-        if cmd=="" then return end
-        local args={}
-        for word in cmd:gmatch("%S+") do table.insert(args,word) end
+        local cmd=cmdInput.Text; if cmd=="" then return end
+        local args={}; for word in cmd:gmatch("%S+") do table.insert(args,word) end
         local command=args[1] and args[1]:lower() or ""
         local targetName=args[2] or ""
-
-        -- Find target player
         local targetPlr=nil
         for _,plr in ipairs(Players:GetPlayers()) do
-            if plr.Name:lower():find(targetName:lower()) then
-                targetPlr=plr; break
-            end
+            if plr.Name:lower():find(targetName:lower()) then targetPlr=plr; break end
         end
-
-        if command==":kick" and targetPlr then
-            pcall(function() targetPlr:Kick("Kicked by admin.") end)
+        if command==":kick" and targetPlr then pcall(function() targetPlr:Kick("Kicked by admin.") end)
         elseif command==":kill" and targetPlr and targetPlr.Character then
             local root=targetPlr.Character:FindFirstChild("HumanoidRootPart")
             if root then local bv=Instance.new("BodyVelocity"); bv.Velocity=Vector3.new(0,5000,0); bv.MaxForce=Vector3.new(1e9,1e9,1e9); bv.Parent=root; Debris:AddItem(bv,0.1) end
-        elseif command==":ff" and targetPlr and targetPlr.Character then
-            Instance.new("ForceField").Parent=targetPlr.Character
+        elseif command==":ff" and targetPlr and targetPlr.Character then Instance.new("ForceField").Parent=targetPlr.Character
         elseif command==":unff" and targetPlr and targetPlr.Character then
             for _,ff in ipairs(targetPlr.Character:GetChildren()) do if ff:IsA("ForceField") then ff:Destroy() end end
         elseif command==":freeze" and targetPlr and targetPlr.Character then
@@ -770,27 +747,16 @@ local function BuildMain()
         elseif command==":thaw" and targetPlr and targetPlr.Character then
             for _,p in ipairs(targetPlr.Character:GetDescendants()) do if p:IsA("BasePart") then pcall(function() p.Anchored=false end) end end
         elseif command==":speed" and targetPlr and targetPlr.Character then
-            local spd=tonumber(args[3]) or 50
-            local hum=targetPlr.Character:FindFirstChildOfClass("Humanoid")
-            if hum then hum.WalkSpeed=spd end
+            local spd=tonumber(args[3]) or 50; local hum=targetPlr.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.WalkSpeed=spd end
         elseif command==":bring" and targetPlr and targetPlr.Character then
-            local root=targetPlr.Character:FindFirstChild("HumanoidRootPart")
-            local _,hrp2,_=GetChar()
+            local root=targetPlr.Character:FindFirstChild("HumanoidRootPart"); local _,hrp2,_=GetChar()
             if root and hrp2 then root.CFrame=CFrame.new(hrp2.Position+Vector3.new(3,0,0)) end
-        elseif command==":respawn" and targetPlr then
-            pcall(function() targetPlr:LoadCharacter() end)
+        elseif command==":respawn" and targetPlr then pcall(function() targetPlr:LoadCharacter() end)
         elseif command==":god" and targetPlr and targetPlr.Character then
             local hum=targetPlr.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                Connections["GOD_"..targetPlr.Name]=RunService.Heartbeat:Connect(function()
-                    if hum and hum.Health<hum.MaxHealth then hum.Health=hum.MaxHealth end
-                end)
-            end
+            if hum then Connections["GOD_"..targetPlr.Name]=RunService.Heartbeat:Connect(function() if hum and hum.Health<hum.MaxHealth then hum.Health=hum.MaxHealth end end) end
         elseif command==":ungod" then
-            if Connections["GOD_"..targetName] then
-                pcall(function() Connections["GOD_"..targetName]:Disconnect() end)
-                Connections["GOD_"..targetName]=nil
-            end
+            if Connections["GOD_"..targetName] then pcall(function() Connections["GOD_"..targetName]:Disconnect() end); Connections["GOD_"..targetName]=nil end
         end
         cmdInput.Text=""
     end)
@@ -812,17 +778,13 @@ local function BuildMain()
         local L=game:GetService("Lighting"); L.Brightness=1; L.ClockTime=14; L.FogEnd=100000; L.GlobalShadows=true
     end)
     Section(SETP,"ABOUT")
-    local about=New("Frame",{Size=UDim2.new(1,0,0,80),BackgroundColor3=C.BG_Card,BorderSizePixel=0},SETP)
-    Corner(about,8); Stroke(about,C.Accent,1.5)
+    local about=New("Frame",{Size=UDim2.new(1,0,0,80),BackgroundColor3=C.BG_Card,BorderSizePixel=0},SETP); Corner(about,8); Stroke(about,C.Accent,1.5)
     New("TextLabel",{Size=UDim2.new(1,-16,1,0),Position=UDim2.new(0,8,0,0),BackgroundTransparency=1,
-        Text="🛡️  H4ll0 Admin Hub  v1.0\nAdmin : "..LocalPlayer.Name.."\nStatus: ADMIN ✅\nDiscord: discord.gg/xCV9Tf4y5N",
+        Text="🛡️  H4ll0 Admin Hub  v2.0\nFix: Mobile Fly Controller ✅\nAdmin : "..LocalPlayer.Name.."\nDiscord: discord.gg/xCV9Tf4y5N",
         TextColor3=C.TextSub,TextXAlignment=Enum.TextXAlignment.Left,TextSize=11,TextWrapped=true,Font=Enum.Font.Gotham},about)
-
-    local stopBtn=New("TextButton",{Size=UDim2.new(1,0,0,36),BackgroundColor3=C.Red,Text="⛔  Stop All Features",TextColor3=Color3.fromRGB(200,220,255),TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0},SETP)
-    Corner(stopBtn,8)
+    local stopBtn=New("TextButton",{Size=UDim2.new(1,0,0,36),BackgroundColor3=C.Red,Text="⛔  Stop All Features",TextColor3=Color3.fromRGB(200,220,255),TextSize=12,Font=Enum.Font.GothamBold,BorderSizePixel=0},SETP); Corner(stopBtn,8)
     stopBtn.MouseButton1Click:Connect(function()
-        StopAll()
-        for k in pairs(Toggles) do Toggles[k]=false end
+        StopAll(); for k in pairs(Toggles) do Toggles[k]=false end
         stopBtn.Text="✅ All Stopped"; task.wait(2); stopBtn.Text="⛔  Stop All Features"
     end)
 
